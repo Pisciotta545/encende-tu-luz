@@ -38,6 +38,18 @@
   .total b { display: block; font: 500 clamp(54px, 6.4vw, 120px)/.9 var(--display); color: var(--vela); font-variant-numeric: tabular-nums lining-nums; text-shadow: 0 0 30px rgba(255,170,80,.5); }
   .total span { display: block; margin-top: 6px; font-size: clamp(11px, .85vw, 15px); letter-spacing: .22em; text-transform: uppercase; color: var(--tenue); }
   .lista { min-width: 0; }
+  .lista h3 small { margin-left: 6px; font-weight: 400; letter-spacing: .06em; color: var(--tenue); }
+  .lista li.otras .n, .lista li.otras .c { color: var(--tenue); font-weight: 300; }
+  #tabla { position: absolute; inset: 0; z-index: 5; overflow: auto; background: rgba(0,0,0,.94); padding: calc(var(--gutter) + env(safe-area-inset-top, 0px)) var(--gutter) var(--gutter); }
+  .tabla-cab { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 24px; margin-bottom: 18px; }
+  .tabla-cab h2 { margin: 0; font: italic 500 clamp(28px, 3vw, 48px)/1 var(--display); }
+  .tabla-cab p { margin: 0; color: var(--tenue); font-size: clamp(14px, 1.1vw, 18px); }
+  .tabla-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 24px 48px; }
+  .tabla-cols h3 { margin: 0 0 8px; font-size: 13px; font-weight: 500; letter-spacing: .22em; text-transform: uppercase; color: var(--vela); }
+  .tabla-cols table { width: 100%; border-collapse: collapse; font-size: clamp(14px, 1vw, 18px); }
+  .tabla-cols td { padding: 5px 0; border-bottom: 1px solid var(--hilo); }
+  .tabla-cols td:last-child { text-align: right; color: var(--vela); font-variant-numeric: tabular-nums; font-weight: 500; }
+  .tabla-cols tr.suma td { border-bottom: 0; padding-top: 10px; color: var(--tinta); font-weight: 500; }
   .lista h3 { margin: 0 0 6px; font-size: clamp(11px, .8vw, 14px); font-weight: 500; letter-spacing: .22em; text-transform: uppercase; color: var(--vela); }
   .lista ol { list-style: none; margin: 0; padding: 0; }
   .lista li { display: flex; justify-content: space-between; gap: 12px; padding: clamp(2px, .45vh, 6px) 0; border-bottom: 1px solid var(--hilo); font-size: clamp(14px, 1.15vw, 22px); }
@@ -79,8 +91,16 @@
 
   <section id="recuento" class="oculto" aria-live="polite">
     <div class="total"><b id="n-total">0</b><span>luces encendidas</span></div>
-    <div class="lista"><h3>Por localidad</h3><ol id="l-localidades"></ol></div>
-    <div class="lista"><h3>Por iglesia</h3><ol id="l-iglesias"></ol></div>
+    <div class="lista"><h3>Por localidad <small id="cant-localidades"></small></h3><ol id="l-localidades"></ol></div>
+    <div class="lista"><h3>Por iglesia <small id="cant-iglesias"></small></h3><ol id="l-iglesias"></ol></div>
+  </section>
+
+  <section id="tabla" hidden aria-label="Recuento completo">
+    <div class="tabla-cab"><h2>Recuento completo</h2><p id="tabla-resumen"></p></div>
+    <div class="tabla-cols">
+      <div><h3>Por localidad</h3><table id="t-localidades"></table></div>
+      <div><h3>Por iglesia</h3><table id="t-iglesias"></table></div>
+    </div>
   </section>
 </div>
 
@@ -110,14 +130,23 @@
     for (const l of p.loc) { lugares.set(clave(p.p) + "|" + clave(l.n), { lat: l.lat, lon: l.lon, nombre: l.n }); la += l.lat; lo += l.lon; }
     centroPartido.set(clave(p.p), { lat: la / p.loc.length, lon: lo / p.loc.length, nombre: p.p, unica: p.loc.length === 1 ? p.loc[0] : null });
   }
+  // Nombres de localidad que se repiten en más de un partido (p. ej. "Del Viso": Pilar y José C. Paz):
+  // se muestran con el partido para que el recuento no tenga dos filas con el mismo nombre.
+  const partidosPorNombre = new Map();
+  for (const p of LOC.partidos) for (const l of p.loc) {
+    const k = clave(l.n);
+    partidosPorNombre.set(k, (partidosPorNombre.get(k) || new Set()).add(p.p));
+  }
+  const nombreLugar = (loc, partido) => (partidosPorNombre.get(clave(loc)) || new Set()).size > 1 ? `${loc} (${partido})` : loc;
   function ubicar(partido, localidad) {
     if (!partido) return null;
     if (partido === OTRO_LUGAR) return { fuera: true, nombre: "Fuera de la provincia" };
     const cp = centroPartido.get(clave(partido));
     if (!cp) return null;
-    if (!localidad && cp.unica) return { lat: cp.unica.lat, lon: cp.unica.lon, nombre: cp.unica.n };
-    if (!localidad || /^otra localidad/i.test(localidad)) return { lat: cp.lat, lon: cp.lon, nombre: cp.nombre };
-    return lugares.get(clave(partido) + "|" + clave(localidad)) || { lat: cp.lat, lon: cp.lon, nombre: cp.nombre };
+    if (!localidad && cp.unica) return { lat: cp.unica.lat, lon: cp.unica.lon, nombre: nombreLugar(cp.unica.n, cp.nombre) };
+    if (!localidad || /^otra localidad/i.test(localidad)) return { lat: cp.lat, lon: cp.lon, nombre: `${cp.nombre} (otra localidad)` };
+    const l = lugares.get(clave(partido) + "|" + clave(localidad));
+    return l ? { lat: l.lat, lon: l.lon, nombre: nombreLugar(l.nombre, cp.nombre) } : { lat: cp.lat, lon: cp.lon, nombre: `${cp.nombre} (otra localidad)` };
   }
   // la misma iglesia aunque esté escrita distinto ("Iglesia Rajem", "rajem", "RAJEM.")
   const claveIglesia = (s) => clave(s).replace(/[^a-z0-9ñ ]+/g, " ").replace(/\b(iglesia|iglesias|evangelica|cristiana|ministerio|la|el|de)\b/g, " ").replace(/\s+/g, " ").trim() || clave(s);
@@ -131,8 +160,13 @@
     limites: topojson.mesh(geo, obj, (a, b) => a !== b && a.properties.prov === "06" && b.properties.prov === "06"),
     comunas: topojson.mesh(geo, obj, (a, b) => a !== b && (a.properties.prov === "02" || b.properties.prov === "02"))
   };
+  // Calles alrededor de la iglesia (OpenStreetMap). Como en el otro mapa, se calculan relativas a las
+  // coordenadas exactas de Rajem (×LOCAL) para que se vean bien con el zoom máximo.
   const R = window.RAJEM_GEO;
-  if (R) for (const k of ["avenidas", "calles", "vias"]) capas[k] = topojson.feature(R, R.objects[k]);
+  const callesGeo = {};
+  if (R) for (const k of ["avenidas", "calles", "vias"]) callesGeo[k] = topojson.feature(R, R.objects[k]);
+  const LOCAL = 1e4;
+  let origen = [0, 0], trazosCalles = {};
   const PROVINCIA = [-63.5, -41.1, -56.6, -33.2];
 
   let W, H, dpr, proj, trazos = {}, pxKm = 1;
@@ -155,17 +189,6 @@
     const dlon = km / 2 / (111.32 * Math.cos(lat * Math.PI / 180)), dlat = km / 2 / 110.57 * 0.6;
     return vistaDe([lon - dlon, lat - dlat, lon + dlon, lat + dlat]);
   }
-  function vistaLuces() {
-    const ps = luces.filter((l) => l.t !== null && l.lat0 != null);
-    if (!ps.length) return vistaDe(PROVINCIA);
-    let o = 180, s = 90, e = -180, n = -90;
-    for (const l of ps) { o = Math.min(o, l.lon0); e = Math.max(e, l.lon0); s = Math.min(s, l.lat0); n = Math.max(n, l.lat0); }
-    const minG = 0.3;
-    if (e - o < minG) { const c = (o + e) / 2; o = c - minG / 2; e = c + minG / 2; }
-    if (n - s < minG * .7) { const c = (n + s) / 2; s = c - minG * .35; n = c + minG * .35; }
-    const m = 0.14 * Math.max(e - o, n - s);
-    return vistaDe([o - m, s - m, e + m, n + m]);
-  }
   let objetivo = "";
   function volarA(v, ms) {
     const k = v.map((x) => x.toFixed(1)).join(",");
@@ -183,11 +206,16 @@
     proj = d3.geoMercator().fitSize([W, H], { type: "Feature", geometry: { type: "Polygon", coordinates: [[[PROVINCIA[0], PROVINCIA[1]], [PROVINCIA[2], PROVINCIA[1]], [PROVINCIA[2], PROVINCIA[3]], [PROVINCIA[0], PROVINCIA[3]], [PROVINCIA[0], PROVINCIA[1]]]] } });
     const ruta = d3.geoPath(proj);
     for (const k in capas) trazos[k] = new Path2D(ruta(capas[k]));
+    origen = proj([IG.lon, IG.lat]);
+    const relativa = d3.geoTransform({ point(x, y) { const q = proj([x, y]); this.stream.point((q[0] - origen[0]) * LOCAL, (q[1] - origen[1]) * LOCAL); } });
+    const rl = d3.geoPath(relativa);
+    for (const k in callesGeo) trazosCalles[k] = new Path2D(rl(callesGeo[k]));
     const a = proj([IG.lon, IG.lat]), b = proj([IG.lon + 0.05, IG.lat]);
     pxKm = Math.abs(b[0] - a[0]) / (0.05 * 111.32 * Math.cos(IG.lat * Math.PI / 180));
     for (const l of luces) proyectar(l);
     objetivo = "";
-    cam = fase === "viaje" || fase === "fin" ? vistaKm(IG.lat, IG.lon, 2.6) : vistaLuces();
+    cam = fase === "cuadra" || fase === "fin" ? vistaKm(IG.lat, IG.lon, 0.7)
+      : fase === "viaje" || fase === "partido" ? vistaKm(IG.lat, IG.lon, 16) : vistaDe(PROVINCIA);
     vuelo = null; baseSucia = true;
   }
 
@@ -205,10 +233,20 @@
     linea("limites", pr(0.32, 0.6), pr(0.7, 1.4));
     linea("comunas", pr(0.18, 0.4), pr(0.5, 1));
     linea("contorno", 0.95, pr(1.3, 2.4));
-    // calles alrededor de Rajem: aparecen al acercarse
-    linea("avenidas", pr(0.85, 1) * aparece(km, 14, 5), pr(1.2, 2.2));
-    linea("vias", pr(0.55, 0.9) * aparece(km, 12, 4), pr(1, 1.8), [5, 4]);
-    linea("calles", pr(0.4, 0.65) * aparece(km, 7, 3), pr(0.7, 1.3));
+    // calles alrededor de Rajem: aparecen al acercarse (dibujadas relativas a la iglesia)
+    if (km < 20) {
+      const kl = k / LOCAL;
+      bctx.setTransform(dpr * kl, 0, 0, dpr * kl, dpr * (W / 2 + (origen[0] - cam[0]) * k), dpr * (H / 2 + (origen[1] - cam[1]) * k));
+      const calle = (t, a, w, guiones) => {
+        if (a <= 0 || !trazosCalles[t]) return;
+        bctx.globalAlpha = Math.min(1, a); bctx.lineWidth = w / kl;
+        bctx.setLineDash(guiones ? guiones.map((g) => g / kl) : []);
+        bctx.stroke(trazosCalles[t]);
+      };
+      calle("avenidas", pr(0.9, 1) * aparece(km, 11, 4.5), pr(1.3, 2.3));
+      calle("vias", pr(0.6, 0.9) * aparece(km, 10, 4), pr(1, 1.8), [5, 4]);
+      calle("calles", pr(0.42, 0.65) * aparece(km, 6, 2.5), pr(0.7, 1.3));
+    }
     bctx.setLineDash([]); bctx.globalAlpha = 1;
   }
 
@@ -240,7 +278,7 @@
     if (!u || !iglesia) return;
     vistos.add(id);
     luces.push({
-      id, iglesia, lugar: u.fuera ? "fuera" : clave(u.nombre) + "|" + u.lat, lugarNombre: u.nombre,
+      id, iglesia, partido, localidad, lugar: u.fuera ? "fuera" : clave(u.nombre), lugarNombre: u.nombre,
       lat0: u.fuera ? null : u.lat, lon0: u.fuera ? null : u.lon, lat: null, lon: null, p: null,
       f: 0.7 + Math.random() * 0.6, fase: Math.random() * 6.28, t: null, retraso: Math.random()
     });
@@ -275,6 +313,11 @@
     $("recuento").classList.remove("oculto");
     arrancarMusica();
   }
+  // Etapas del final (como el acercamiento del otro mapa):
+  //  rajem  → Rajem se resalta sobre la provincia (sin zoom)
+  //  viaje  → las luces vuelan a Rajem mientras la cámara se acerca a José C. Paz
+  //  cuadra → la cámara baja hasta la cuadra de la iglesia (sus coordenadas exactas)
+  const ETAPAS = { rajem: 3.2, viaje: 5, pausaPartido: 1.6, cuadra: 3.6 };
   function avanzar() {
     const t = ahoraS();
     if (fase === "llenando" && t >= proximo) {
@@ -283,46 +326,41 @@
         const l = pendientes[0];
         l.t = performance.now();
         recontar(l);
-        if (l.lat0 != null) volarA(vistaLuces());
         proximo = t + intervalo();
       } else if (!C.planilla || listoPlanilla) {
         fase = "pausa"; proximo = t + (C.pausaAntesDeRajem || 2.5);
       }
     }
     if (fase === "pausa" && t >= proximo) {
-      fase = "rajem"; tFase = t; proximo = t + 3.2;
-      volarA(vistaDe(rangoRajem()), 2600);
+      fase = "rajem"; tFase = t; proximo = t + ETAPAS.rajem;
       cartel("La luz llega a casa", IG.nombre);
     }
     if (fase === "rajem" && t >= proximo) {
       fase = "viaje"; tFase = t;
-      for (const l of luces) l.retraso = Math.random() * 0.35;
-      volarA(vistaKm(IG.lat, IG.lon, 2.6), (C.duracionViaje || 8) * 1000);
+      for (const l of luces) l.retraso = Math.random() * 0.3;
+      volarA(vistaKm(IG.lat, IG.lon, 16), ETAPAS.viaje * 1000);
+      cartel("Partido de José C. Paz", "José C. Paz");
     }
-    if (fase === "viaje") {
-      const dur = C.duracionViaje || 8;
+    if (fase === "viaje" || fase === "partido" || fase === "cuadra" || fase === "fin") {
       let llegaron = 0;
       for (const l of luces) {
         if (l.lat0 == null || l.t === null) continue;
-        const u = Math.max(0, Math.min(1, ((t - tFase) / dur - l.retraso * 0.5) / (1 - 0.5 * 0.35)));
+        const u = Math.max(0, Math.min(1, ((t - tFase) / ETAPAS.viaje - l.retraso) / (1 - 0.3)));
         const e = u < 0.5 ? 4 * u * u * u : 1 - Math.pow(-2 * u + 2, 3) / 2;
-        // un pequeño arco para que el viaje se vea como un vuelo
-        const arco = Math.sin(Math.PI * e) * 0.04 * Math.hypot(l.la - IG.lat, l.lo - IG.lon);
-        l.lat = l.la + (IG.lat - l.la) * e + arco;
+        l.lat = l.la + (IG.lat - l.la) * e;
         l.lon = l.lo + (IG.lon - l.lo) * e;
         proyectar(l);
         if (u >= 1) llegaron++;
       }
       llegadas = llegaron;
-      if (t - tFase >= dur + 0.4) { fase = "fin"; tFase = t; cartel(IG.direccion, IG.nombre); }
     }
-  }
-  // zona que muestra Rajem y todas las luces a la vez
-  function rangoRajem() {
-    let o = IG.lon, s = IG.lat, e = IG.lon, n = IG.lat;
-    for (const l of luces) if (l.lat0 != null) { o = Math.min(o, l.lon0); e = Math.max(e, l.lon0); s = Math.min(s, l.lat0); n = Math.max(n, l.lat0); }
-    const m = 0.14 * Math.max(e - o, n - s, 0.3);
-    return [o - m, s - m, e + m, n + m];
+    if (fase === "viaje" && t - tFase >= ETAPAS.viaje) { fase = "partido"; proximo = t + ETAPAS.pausaPartido; }
+    if (fase === "partido" && t >= proximo) {
+      fase = "cuadra"; proximo = t + ETAPAS.cuadra;
+      volarA(vistaKm(IG.lat, IG.lon, 0.7), ETAPAS.cuadra * 1000);
+      cartel(IG.direccion, IG.nombre);
+    }
+    if (fase === "cuadra" && t >= proximo) fase = "fin";
   }
   function cartel(sub, titulo) {
     $("cartel-sub").textContent = sub || "";
@@ -360,7 +398,7 @@
     }
 
     // Rajem: faro con ondas, cada vez más fuerte a medida que llegan las luces
-    if (fase === "rajem" || fase === "viaje" || fase === "fin") {
+    if (fase === "rajem" || fase === "viaje" || fase === "partido" || fase === "cuadra" || fase === "fin") {
       const p = proj([IG.lon, IG.lat]);
       const x = p[0] * k + ox, y = p[1] * k + oy;
       const entrada = Math.min(1, (s - tFaseRajem()) / 1.2);
@@ -436,20 +474,57 @@
     rankingIglesias = [...igl.values()].map((g) => ({ k: g.k, n: g.n, nombre: [...g.nombres.entries()].sort((a, b) => b[1] - a[1])[0][0] }))
       .sort((a, b) => b.n - a.n || a.nombre.localeCompare(b.nombre, "es"));
     rankingLugares = [...lug.values()].sort((a, b) => b.n - a.n || a.nombre.localeCompare(b.nombre, "es"));
+    totalEncendidas = total;
     $("n-total").textContent = total;
-    pintar($("l-localidades"), rankingLugares, nueva && nueva.lugar);
-    pintar($("l-iglesias"), rankingIglesias, nueva && claveIglesia(nueva.iglesia));
+    $("cant-localidades").textContent = rankingLugares.length ? "· " + rankingLugares.length : "";
+    $("cant-iglesias").textContent = rankingIglesias.length ? "· " + rankingIglesias.length : "";
+    pintar($("l-localidades"), rankingLugares, nueva && nueva.lugar, "localidades");
+    pintar($("l-iglesias"), rankingIglesias, nueva && claveIglesia(nueva.iglesia), "iglesias");
+    if (!$("tabla").hidden) pintarTabla();
   }
-  function pintar(ol, ranking, claveNueva) {
+  let totalEncendidas = 0;
+  // se ven las primeras y el resto se suma en "Otras…", así la columna siempre da el total
+  function pintar(ol, ranking, claveNueva, que) {
     ol.replaceChildren();
-    for (const g of ranking.slice(0, C.filasRecuento || 5)) {
+    const filas = C.filasRecuento || 5;
+    const fila = (nombre, n, clase) => {
       const li = document.createElement("li");
-      if (g.k === claveNueva) li.className = "sube";
-      const n = document.createElement("span"); n.className = "n"; n.textContent = g.nombre;
-      const c = document.createElement("span"); c.className = "c"; c.textContent = g.n;
-      li.append(n, c); ol.append(li);
-    }
+      if (clase) li.className = clase;
+      const a = document.createElement("span"); a.className = "n"; a.textContent = nombre;
+      const b = document.createElement("span"); b.className = "c"; b.textContent = n;
+      li.append(a, b); ol.append(li);
+    };
+    const visibles = ranking.length > filas ? ranking.slice(0, filas - 1) : ranking;
+    for (const g of visibles) fila(g.nombre, g.n, g.k === claveNueva ? "sube" : "");
+    const resto = ranking.slice(visibles.length);
+    if (resto.length) fila(`Otras ${resto.length} ${que}`, resto.reduce((a, g) => a + g.n, 0), "otras");
   }
+  // Tecla T: tabla con TODAS las localidades e iglesias, para controlar contra la planilla
+  function pintarTabla() {
+    const llenar = (tabla, ranking) => {
+      tabla.replaceChildren();
+      for (const g of ranking) {
+        const tr = document.createElement("tr");
+        const a = document.createElement("td"); a.textContent = g.nombre;
+        const b = document.createElement("td"); b.textContent = g.n;
+        tr.append(a, b); tabla.append(tr);
+      }
+      const tr = document.createElement("tr"); tr.className = "suma";
+      const a = document.createElement("td"); a.textContent = "Total";
+      const b = document.createElement("td"); b.textContent = ranking.reduce((x, g) => x + g.n, 0);
+      tr.append(a, b); tabla.append(tr);
+    };
+    llenar($("t-localidades"), rankingLugares);
+    llenar($("t-iglesias"), rankingIglesias);
+    $("tabla-resumen").textContent = `${totalEncendidas} luces encendidas de ${luces.length} respuestas · ${rankingLugares.length} localidades · ${rankingIglesias.length} iglesias`;
+  }
+  // para controlar el recuento desde afuera (pruebas)
+  window.__fdlRecuento = () => ({
+    total: totalEncendidas,
+    respuestas: luces.map((l) => ({ partido: l.partido, localidad: l.localidad, iglesia: l.iglesia, encendida: l.t !== null })),
+    localidades: rankingLugares.map((g) => [g.nombre, g.n]),
+    iglesias: rankingIglesias.map((g) => [g.nombre, g.n])
+  });
 
   // ── Música ────────────────────────────────────────────────
   const musica = C.audio && C.audio.musica ? new Audio(C.audio.musica) : null;
@@ -563,10 +638,11 @@
     else if (t === "r") location.reload();
     else if (t === "p") { proyector = !proyector; baseSucia = true; try { localStorage.setItem("fdl-proyector", proyector ? "1" : "0"); } catch (e) { /* */ } }
     else if (t === "m") { silencio = !silencio; if (musica) musica.muted = silencio; }
+    else if (t === "t") { $("tabla").hidden = !$("tabla").hidden; if (!$("tabla").hidden) pintarTabla(); }
     else return;
     ev.preventDefault();
   });
-  escenario.addEventListener("pointerup", () => empezar());
+  escenario.addEventListener("pointerup", (ev) => { if (!ev.target.closest("#tabla")) empezar(); });
   let temporizador = null;
   window.addEventListener("pointermove", () => {
     escenario.classList.remove("sin-cursor");
