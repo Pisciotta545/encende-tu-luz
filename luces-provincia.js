@@ -1,19 +1,31 @@
 // ─────────────────────────────────────────────────────────────
-//  Encendé tu luz · mapa de la provincia de Buenos Aires
+//  Mapa sorpresa de la provincia de Buenos Aires (mapa-provincia.html)
 //
-//  1. Crear el formulario con formulario\crear-formulario.gs (ver instrucciones adentro).
-//  2. Pegar acá las dos líneas que muestra el script: FORMULARIO y PLANILLA.
-//  Mientras "planilla" esté vacía, el mapa funciona en MODO DE PRUEBA con datos de ejemplo.
+//  Las luces son las respuestas del formulario "Encendé tu luz"
+//  (se crea con formulario\crear-formulario.gs). Al abrir el mapa se
+//  encienden todas, una por una, con el recuento abajo; al final todas
+//  viajan hasta la Iglesia Rajem mientras la cámara se acerca.
+//  Mientras "planilla" esté vacía funciona en MODO DE PRUEBA con datos de ejemplo.
 // ─────────────────────────────────────────────────────────────
 window.LUCES_PROVINCIA = {
-  titulo: "Encendé tu luz",
-  bajada: "Escaneá el código, contanos de dónde venís y el nombre de tu iglesia",
-
-  formulario: "",       // link del formulario (ej.: https://forms.gle/...) → con esto se arma el QR
+  formulario: "",       // link del formulario (para armar el QR que se reparte aparte)
   planilla: "",         // ID de la planilla de respuestas (la línea PLANILLA del script)
   hoja: "Respuestas",   // nombre de la hoja de respuestas
-  cadaSegundos: 8,      // cada cuánto se leen respuestas nuevas
+  cadaSegundos: 8,      // mientras se encienden, cada cuánto se buscan respuestas nuevas
 
-  filasPorLista: 7,     // cuántas iglesias / localidades se ven por página
-  segundosPorPagina: 8  // si hay más, cada cuánto pasa de página
+  duracionLlenado: 30,  // segundos para encender todas las luces (se reparten entre todas)
+  pausaAntesDeRajem: 2.5,
+  duracionViaje: 8,     // segundos que tardan las luces en llegar a Rajem
+  filasRecuento: 5,     // cuántas localidades / iglesias se ven abajo
+
+  iglesia: {
+    nombre: "Iglesia Rajem",
+    direccion: "Hipólito Yrigoyen 2060 · José C. Paz",
+    lat: -34.520179, lon: -58.755373
+  },
+
+  audio: {
+    musica: "audio/musica-epica.mp3",   // la misma música del otro mapa
+    volumen: 0.55
+  }
 };
