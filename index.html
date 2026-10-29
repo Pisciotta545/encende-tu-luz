@@ -1,0 +1,581 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Encendé tu luz · Provincia</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;1,400;1,500&family=Jost:wght@300;400;500&display=swap">
+<style>
+  :root {
+    color-scheme: dark;
+    --noche: #000000;
+    --tinta: #f6f1e7;
+    --tenue: rgba(246, 241, 231, 0.62);
+    --hilo: rgba(246, 241, 231, 0.16);
+    --vela: #ffd28a;
+    --gutter: clamp(16px, 2.6vw, 44px);
+    --panel: clamp(300px, 27vw, 470px);
+    --display: "Cormorant Garamond", "Cormorant", Georgia, "Times New Roman", serif;
+    --ui: "Jost", "Futura", "Century Gothic", system-ui, sans-serif;
+  }
+  html, body { margin: 0; height: 100%; background: var(--noche); }
+  body { overflow: hidden; color: var(--tinta); font-family: var(--ui); font-weight: 300; -webkit-font-smoothing: antialiased; }
+  #escenario { position: fixed; inset: 0; background: var(--noche); }
+  #escenario.sin-cursor { cursor: none; }
+  canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+  #luz { mix-blend-mode: screen; }
+
+  /* Panel derecho: QR + recuentos */
+  #panel {
+    position: absolute; top: 0; right: 0; bottom: 0;
+    width: var(--panel);
+    box-sizing: border-box;
+    padding: calc(var(--gutter) + env(safe-area-inset-top, 0px)) calc(var(--gutter) + env(safe-area-inset-right, 0px)) calc(var(--gutter) * .8 + env(safe-area-inset-bottom, 0px)) var(--gutter);
+    display: flex; flex-direction: column; gap: clamp(10px, 1.6vh, 20px);
+    background: linear-gradient(to left, rgba(0,0,0,.92) 70%, rgba(0,0,0,0));
+  }
+  .antetitulo { margin: 0; font-size: clamp(11px, .8vw, 14px); font-weight: 400; letter-spacing: .24em; text-transform: uppercase; color: var(--vela); }
+  #titulo { margin: .2rem 0 0; font: italic 500 clamp(30px, 2.8vw, 54px)/1 var(--display); text-shadow: 0 0 30px rgba(255,190,110,.3); }
+  #bajada { margin: .5rem 0 0; font-size: clamp(13px, .95vw, 17px); line-height: 1.4; color: var(--tenue); text-wrap: balance; }
+  .qr { display: flex; gap: 14px; align-items: center; }
+  #qr {
+    flex: 0 0 auto;
+    width: clamp(120px, 11vw, 210px); aspect-ratio: 1;
+    background: #fff; border-radius: 10px; padding: 8px; box-sizing: border-box;
+    box-shadow: 0 0 40px rgba(255, 200, 120, .25);
+  }
+  #qr svg { width: 100%; height: 100%; display: block; }
+  #qr-texto { font-size: clamp(12px, .85vw, 15px); line-height: 1.35; color: var(--tenue); word-break: break-word; }
+  #qr-texto b { display: block; color: var(--tinta); font-weight: 500; margin-bottom: 4px; }
+  .total { display: flex; align-items: baseline; gap: 12px; border-top: 1px solid var(--hilo); padding-top: clamp(8px, 1.4vh, 16px); }
+  #n-total { font: 500 clamp(44px, 4.6vw, 88px)/1 var(--display); color: var(--vela); font-variant-numeric: tabular-nums lining-nums; text-shadow: 0 0 26px rgba(255,170,80,.5); }
+  .total span { font-size: clamp(12px, .85vw, 15px); letter-spacing: .2em; text-transform: uppercase; color: var(--tenue); }
+  .lista { flex: 1 1 0; min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
+  .lista h3 { margin: 0 0 6px; display: flex; justify-content: space-between; font-size: clamp(11px, .8vw, 14px); font-weight: 500; letter-spacing: .2em; text-transform: uppercase; color: var(--vela); }
+  .lista h3 small { font-weight: 400; letter-spacing: .05em; color: var(--tenue); }
+  .lista ol { list-style: none; margin: 0; padding: 0; transition: opacity .5s ease; }
+  .lista ol.cambiando { opacity: 0; }
+  .lista li { display: flex; justify-content: space-between; gap: 12px; padding: clamp(3px, .5vh, 6px) 0; border-bottom: 1px solid var(--hilo); font-size: clamp(14px, 1.05vw, 20px); }
+  .lista li .n { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .lista li .c { font-variant-numeric: tabular-nums; color: var(--vela); font-weight: 500; }
+  .lista li.nueva { animation: brillo 2.4s ease; }
+  @keyframes brillo { from { background: rgba(255, 200, 120, .25); } to { background: transparent; } }
+  .lista .vacio { color: var(--tenue); font-size: clamp(13px, .9vw, 16px); padding: 6px 0; }
+  #estado { margin: 0; flex: 0 0 auto; font-size: 11px; letter-spacing: .04em; color: rgba(246,241,231,.32); }
+
+  /* Aviso de luz nueva y modo de prueba */
+  #aviso {
+    position: absolute;
+    left: calc(var(--gutter) + env(safe-area-inset-left, 0px));
+    bottom: calc(var(--gutter) + env(safe-area-inset-bottom, 0px));
+    max-width: calc(100% - var(--panel) - var(--gutter) * 2);
+    margin: 0;
+    font: italic 500 clamp(22px, 2.2vw, 40px)/1.15 var(--display);
+    text-shadow: 0 0 20px #000, 0 0 40px #000;
+    opacity: 0; transform: translateY(8px);
+    transition: opacity .6s ease, transform .6s ease;
+  }
+  #aviso.visible { opacity: 1; transform: none; }
+  #aviso small { display: block; margin-bottom: 4px; font: 400 clamp(11px, .8vw, 14px)/1 var(--ui); font-style: normal; letter-spacing: .22em; text-transform: uppercase; color: var(--vela); }
+  #prueba {
+    position: absolute; left: calc(var(--gutter) + env(safe-area-inset-left, 0px)); top: calc(var(--gutter) + env(safe-area-inset-top, 0px));
+    margin: 0; padding: 6px 12px; border: 1px dashed rgba(255,210,138,.5); border-radius: 999px;
+    font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: var(--vela);
+  }
+
+  /* Celular vertical: panel abajo */
+  @media (orientation: portrait) {
+    #panel {
+      top: auto; left: 0; width: auto; height: 54%; padding-top: 24px; overflow: hidden;
+      background: linear-gradient(to top, rgba(0,0,0,.95) 82%, rgba(0,0,0,0));
+      display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: auto auto auto 1fr auto; gap: 10px 16px;
+    }
+    #panel > div:first-child, .qr, .total, #estado { grid-column: 1 / -1; }
+    #bajada { display: none; }
+    #titulo { font-size: 28px; }
+    #qr { width: 92px; padding: 5px; }
+    .total { padding-top: 8px; }
+    #n-total { font-size: 40px; }
+    .lista li { font-size: 14px; }
+    #aviso { bottom: calc(54% + 8px); max-width: calc(100% - var(--gutter) * 2); font-size: 20px; }
+  }
+  [hidden] { display: none !important; }
+  @media (prefers-reduced-motion: reduce) { * { transition-duration: .01s !important; animation: none !important; } }
+</style>
+</head>
+<body>
+<div id="escenario">
+  <canvas id="base" aria-hidden="true"></canvas>
+  <canvas id="luz" role="img" aria-label="Mapa de la provincia de Buenos Aires: cada luz es una persona que se anotó desde su celular."></canvas>
+
+  <p id="prueba" hidden>Modo de prueba · datos de ejemplo</p>
+  <p id="aviso" aria-live="polite"><small>Nueva luz</small><span id="aviso-texto"></span></p>
+
+  <aside id="panel">
+    <div>
+      <p class="antetitulo">Fiesta de la Luz</p>
+      <h1 id="titulo"></h1>
+      <p id="bajada"></p>
+    </div>
+    <div class="qr">
+      <div id="qr" aria-label="Código QR del formulario"></div>
+      <div id="qr-texto"></div>
+    </div>
+    <div class="total"><b id="n-total">0</b><span>luces encendidas</span></div>
+    <section class="lista"><h3>Por iglesia <small id="pag-iglesias"></small></h3><ol id="l-iglesias"></ol></section>
+    <section class="lista"><h3>Por localidad <small id="pag-localidades"></small></h3><ol id="l-localidades"></ol></section>
+    <p id="estado"></p>
+  </aside>
+</div>
+
+<script src="lib/d3.min.js"></script>
+<script src="lib/topojson-client.min.js"></script>
+<script src="lib/qrcode.js"></script>
+<script src="lib/provincia.js"></script>
+<script src="lib/localidades-ba.js"></script>
+<script src="luces-provincia.js"></script>
+<script>
+(function () {
+  "use strict";
+  const C = window.LUCES_PROVINCIA;
+  const geo = window.PROVINCIA_GEO;
+  const LOC = window.LOCALIDADES_BA;
+  const $ = (id) => document.getElementById(id);
+  const reducir = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const OTRO_LUGAR = "Otro lugar (fuera de la provincia)";
+
+  $("titulo").textContent = C.titulo;
+  $("bajada").textContent = C.bajada;
+
+  // ── QR del formulario ─────────────────────────────────────
+  if (C.formulario) {
+    const qr = qrcode(0, "M");
+    qr.addData(C.formulario);
+    qr.make();
+    $("qr").innerHTML = qr.createSvgTag({ cellSize: 4, margin: 0, scalable: true });
+    $("qr-texto").innerHTML = "<b>Escaneá con la cámara del celular</b>";
+    $("qr-texto").append(C.formulario.replace(/^https?:\/\//, ""));
+  } else {
+    $("qr").innerHTML = '<svg viewBox="0 0 10 10"><text x="5" y="5.6" font-size="1.3" text-anchor="middle" fill="#888" font-family="sans-serif">QR</text></svg>';
+    $("qr-texto").innerHTML = "<b>Acá va el QR</b>Se arma solo cuando se carga el link del formulario en luces-provincia.js";
+  }
+
+  // ── Localidades: coordenadas por partido y localidad ──────
+  const clave = (s) => String(s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().trim();
+  const lugares = new Map();     // "partido|localidad" → {lat, lon, nombre}
+  const centroPartido = new Map();
+  for (const p of LOC.partidos) {
+    let la = 0, lo = 0;
+    for (const l of p.loc) { lugares.set(clave(p.p) + "|" + clave(l.n), { lat: l.lat, lon: l.lon, nombre: l.n }); la += l.lat; lo += l.lon; }
+    centroPartido.set(clave(p.p), { lat: la / p.loc.length, lon: lo / p.loc.length, nombre: p.p, unica: p.loc.length === 1 ? p.loc[0] : null });
+  }
+  function ubicar(partido, localidad) {
+    if (!partido) return null;
+    if (partido === OTRO_LUGAR) return { fuera: true, nombre: "Fuera de la provincia" };
+    const cp = centroPartido.get(clave(partido));
+    if (!cp) return null;
+    if (!localidad && cp.unica) return { lat: cp.unica.lat, lon: cp.unica.lon, nombre: cp.unica.n };
+    if (!localidad || /^otra localidad/i.test(localidad)) return { lat: cp.lat, lon: cp.lon, nombre: cp.nombre };
+    return lugares.get(clave(partido) + "|" + clave(localidad)) || { lat: cp.lat, lon: cp.lon, nombre: cp.nombre };
+  }
+
+  // Iglesias: mismo nombre aunque esté escrito distinto ("Iglesia Rajem", "rajem", "RAJEM.")
+  const claveIglesia = (s) => clave(s).replace(/[^a-z0-9ñ ]+/g, " ").replace(/\b(iglesia|iglesias|evangelica|cristiana|ministerio|la|el|de)\b/g, " ").replace(/\s+/g, " ").trim() || clave(s);
+
+  // ── Mapa ──────────────────────────────────────────────────
+  const escenario = $("escenario"), base = $("base"), luz = $("luz");
+  const bctx = base.getContext("2d"), lctx = luz.getContext("2d");
+  const obj = geo.objects.partidos;
+  const contorno = topojson.mesh(geo, obj, (a, b) => a === b);
+  const limites = topojson.mesh(geo, obj, (a, b) => a !== b && a.properties.prov === "06" && b.properties.prov === "06");
+  const comunas = topojson.mesh(geo, obj, (a, b) => a !== b && (a.properties.prov === "02" || b.properties.prov === "02"));
+  const PROVINCIA = [-63.5, -41.1, -56.6, -33.2];
+  const GBA = [-59.15, -35.05, -57.85, -34.28];
+
+  let W, H, dpr, proj, trazos = {}, panelW = 0, vertical = false;
+  let cam = [0, 0, 1], vuelo = null, modoVista = "auto", baseSucia = true, claveBase = "";
+  let proyector = false;
+  try { proyector = localStorage.getItem("fdl-proyector") === "1"; } catch (e) { /* sin almacenamiento */ }
+  const pr = (a, b) => (proyector ? b : a);
+
+  function vistaDe([o, s, e, n]) {
+    const a = proj([o, n]), b = proj([e, s]);
+    const libreW = vertical ? W : W - panelW, libreH = vertical ? H * 0.46 : H;
+    const w = Math.max((b[0] - a[0]) * W / libreW, (b[1] - a[1]) * W / libreH) * 1.12;
+    const k = W / w;
+    const cx = (a[0] + b[0]) / 2 + (vertical ? 0 : panelW / 2 / k);
+    const cy = (a[1] + b[1]) / 2 + (vertical ? (H - libreH) / 2 / k : 0);
+    return [cx, cy, w];
+  }
+  function vistaAuto() {
+    const ps = luces.filter((l) => l.lat != null);
+    if (modoVista === "provincia" || !ps.length) return vistaDe(PROVINCIA);
+    if (modoVista === "gba") return vistaDe(GBA);
+    let o = 180, s = 90, e = -180, n = -90;
+    for (const l of ps) { o = Math.min(o, l.lon); e = Math.max(e, l.lon); s = Math.min(s, l.lat); n = Math.max(n, l.lat); }
+    const minG = 0.22;   // no acercarse a menos de ~20 km de ancho
+    if (e - o < minG) { const c = (o + e) / 2; o = c - minG / 2; e = c + minG / 2; }
+    if (n - s < minG * .7) { const c = (n + s) / 2; s = c - minG * .35; n = c + minG * .35; }
+    const m = 0.14 * Math.max(e - o, n - s);
+    return vistaDe([o - m, s - m, e + m, n + m]);
+  }
+  let vistaObjetivo = "";
+  function apuntar(inmediato) {
+    const v = vistaAuto();
+    const k = v.map((x) => x.toFixed(1)).join(",");
+    if (k === vistaObjetivo && !inmediato) return;
+    vistaObjetivo = k;
+    if (inmediato || reducir) { cam = v; vuelo = null; baseSucia = true; return; }
+    const interp = d3.interpolateZoom(cam.slice(), v);
+    vuelo = { interp, t0: performance.now(), dur: Math.min(3200, Math.max(1400, interp.duration * 0.8)) };
+  }
+
+  function redimensionar() {
+    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    W = innerWidth; H = innerHeight;
+    vertical = H > W;
+    panelW = vertical ? 0 : $("panel").getBoundingClientRect().width;
+    for (const c of [base, luz]) { c.width = Math.round(W * dpr); c.height = Math.round(H * dpr); }
+    proj = d3.geoMercator().fitSize([W, H], { type: "Feature", geometry: { type: "Polygon", coordinates: [[[PROVINCIA[0], PROVINCIA[1]], [PROVINCIA[2], PROVINCIA[1]], [PROVINCIA[2], PROVINCIA[3]], [PROVINCIA[0], PROVINCIA[3]], [PROVINCIA[0], PROVINCIA[1]]]] } });
+    const ruta = d3.geoPath(proj);
+    trazos = { contorno: new Path2D(ruta(contorno)), limites: new Path2D(ruta(limites)), comunas: new Path2D(ruta(comunas)) };
+    for (const l of luces) proyectar(l);
+    apuntar(true);
+  }
+
+  function dibujarBase() {
+    const clave = cam.join(",") + proyector;
+    if (!baseSucia && clave === claveBase) return;
+    claveBase = clave; baseSucia = false;
+    const k = W / cam[2];
+    bctx.setTransform(1, 0, 0, 1, 0, 0);
+    bctx.fillStyle = "#000";
+    bctx.fillRect(0, 0, base.width, base.height);
+    bctx.setTransform(dpr * k, 0, 0, dpr * k, dpr * (W / 2 - cam[0] * k), dpr * (H / 2 - cam[1] * k));
+    bctx.lineJoin = "round"; bctx.strokeStyle = "#fff";
+    bctx.globalAlpha = pr(0.32, 0.6); bctx.lineWidth = pr(0.7, 1.4) / k; bctx.stroke(trazos.limites);
+    bctx.globalAlpha = pr(0.18, 0.4); bctx.lineWidth = pr(0.5, 1) / k; bctx.stroke(trazos.comunas);
+    bctx.globalAlpha = 0.95; bctx.lineWidth = pr(1.3, 2.4) / k; bctx.stroke(trazos.contorno);
+    bctx.globalAlpha = 1;
+  }
+
+  // ── Luces ─────────────────────────────────────────────────
+  function sprite(intensidad) {
+    const c = document.createElement("canvas");
+    c.width = c.height = 128;
+    const g = c.getContext("2d");
+    g.fillStyle = "#000"; g.fillRect(0, 0, 128, 128);
+    g.globalAlpha = intensidad;
+    const r = g.createRadialGradient(64, 64, 0, 64, 64, 64);
+    r.addColorStop(0, "rgba(255,252,240,1)");
+    r.addColorStop(0.07, "rgba(255,240,205,0.95)");
+    r.addColorStop(0.2, "rgba(255,200,120,0.5)");
+    r.addColorStop(0.45, "rgba(255,150,60,0.14)");
+    r.addColorStop(1, "rgba(255,120,30,0)");
+    g.fillStyle = r; g.fillRect(0, 0, 128, 128);
+    return c;
+  }
+  const brillo = sprite(1), halo = sprite(0.2);
+
+  let luces = [];            // una por respuesta: {id, lat, lon, lugar, iglesia, t, p}
+  const KM_LAT = 1 / 110.57;
+  // Las luces de una misma localidad se acomodan en espiral (estable: cada una conserva su lugar)
+  function colocar() {
+    const porLugar = new Map();
+    for (const l of luces) {
+      if (l.lat0 == null) continue;
+      const i = porLugar.get(l.lugar) || 0;
+      porLugar.set(l.lugar, i + 1);
+      const r = 0.38 * Math.sqrt(i) , a = i * 2.39996;
+      l.lat = l.lat0 + r * Math.sin(a) * KM_LAT;
+      l.lon = l.lon0 + r * Math.cos(a) * KM_LAT / Math.cos(l.lat0 * Math.PI / 180);
+      proyectar(l);
+    }
+  }
+  function proyectar(l) { if (l.lat != null && proj) l.p = proj([l.lon, l.lat]); }
+
+  function dibujarLuces(ahora) {
+    lctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    lctx.globalCompositeOperation = "source-over";
+    lctx.fillStyle = "#000"; lctx.fillRect(0, 0, W, H);
+    const k = W / cam[2];
+    const ox = W / 2 - cam[0] * k, oy = H / 2 - cam[1] * k;
+    const escala = Math.min(1.4, 0.7 + 0.12 * Math.log2(k + 1)) * Math.min(1, Math.max(0.6, W / 1500)) * pr(1, 1.3);
+    const s = ahora / 1000;
+    for (const l of luces) {
+      if (!l.p) continue;
+      const x = l.p[0] * k + ox, y = l.p[1] * k + oy;
+      if (x < -150 || y < -150 || x > W + 150 || y > H + 150) continue;
+      const edad = (ahora - l.t) / 1000;
+      const parpadeo = 1 + 0.07 * Math.sin(s * 3.1 * l.f + l.fase);
+      const destello = reducir || edad > 1.2 || edad < 0 ? 0 : 2.2 * Math.pow(1 - edad / 1.2, 2);
+      if (edad < 0) continue;
+      lctx.globalCompositeOperation = "lighten";
+      const rh = 70 * escala;
+      lctx.drawImage(halo, x - rh, y - rh, rh * 2, rh * 2);
+      const r = 13 * escala * parpadeo * (1 + destello);
+      lctx.drawImage(brillo, x - r, y - r, r * 2, r * 2);
+      if (!reducir && edad < 1.8) {
+        lctx.globalCompositeOperation = "lighter";
+        lctx.globalAlpha = 0.6 * (1 - edad / 1.8);
+        lctx.strokeStyle = "rgb(255,214,150)"; lctx.lineWidth = 1.5;
+        lctx.beginPath(); lctx.arc(x, y, 5 + edad * 90 * escala, 0, Math.PI * 2); lctx.stroke();
+        lctx.globalAlpha = 1;
+      }
+    }
+    // nombres de las localidades con más luces (sin que se pisen)
+    lctx.globalCompositeOperation = "source-over";
+    const tam = Math.round(Math.max(12, Math.min(17, W / 105)) * pr(1, 1.15));
+    lctx.font = `500 ${tam}px Jost, "Century Gothic", system-ui, sans-serif`;
+    lctx.textBaseline = "middle";
+    const cajas = [];
+    for (const g of rankingLugares.slice(0, 12)) {
+      if (g.lat == null) continue;
+      const p = proj([g.lon, g.lat]);
+      const x = p[0] * k + ox, y = p[1] * k + oy;
+      if (x < 0 || y < 0 || x > (vertical ? W : W - panelW) || y > H) continue;
+      const texto = `${/^Ciudad Autónoma/.test(g.nombre) ? "CABA" : g.nombre} · ${g.n}`;
+      const w = lctx.measureText(texto).width;
+      const derecha = (vertical ? W : W - panelW) - 12;
+      const izq = x + 22 + w > derecha;      // cerca del panel: la etiqueta va a la izquierda de la luz
+      const c = izq ? { x0: x - 22 - w, x1: x - 16, y0: y - tam, y1: y + tam } : { x0: x + 16, x1: x + 22 + w, y0: y - tam, y1: y + tam };
+      if (cajas.some((o) => !(c.x1 < o.x0 || c.x0 > o.x1 || c.y1 < o.y0 || c.y0 > o.y1))) continue;
+      cajas.push(c);
+      lctx.lineJoin = "round"; lctx.lineWidth = 4; lctx.strokeStyle = "rgba(0,0,0,.85)";
+      lctx.textAlign = izq ? "right" : "left";
+      lctx.strokeText(texto, izq ? x - 18 : x + 18, y);
+      lctx.fillStyle = "#fbf3e2";
+      lctx.fillText(texto, izq ? x - 18 : x + 18, y);
+      lctx.textAlign = "left";
+    }
+  }
+
+  // ── Recuentos ─────────────────────────────────────────────
+  let rankingIglesias = [], rankingLugares = [];
+  function recontar() {
+    const igl = new Map(), lug = new Map();
+    for (const l of luces) {
+      const ki = claveIglesia(l.iglesia);
+      const gi = igl.get(ki) || { n: 0, nombres: new Map(), ultima: 0 };
+      gi.n++; gi.ultima = Math.max(gi.ultima, l.t);
+      gi.nombres.set(l.iglesia, (gi.nombres.get(l.iglesia) || 0) + 1);
+      igl.set(ki, gi);
+      const gl = lug.get(l.lugar) || { n: 0, nombre: l.lugarNombre, lat: l.lat0, lon: l.lon0, ultima: 0 };
+      gl.n++; gl.ultima = Math.max(gl.ultima, l.t);
+      lug.set(l.lugar, gl);
+    }
+    rankingIglesias = [...igl.values()].map((g) => ({
+      nombre: [...g.nombres.entries()].sort((a, b) => b[1] - a[1])[0][0], n: g.n, ultima: g.ultima
+    })).sort((a, b) => b.n - a.n || a.nombre.localeCompare(b.nombre, "es"));
+    rankingLugares = [...lug.values()].sort((a, b) => b.n - a.n || a.nombre.localeCompare(b.nombre, "es"));
+    $("n-total").textContent = luces.length;
+    pintarListas();
+  }
+  let pagina = 0;
+  // filas que entran en el espacio de cada lista (como máximo filasPorLista)
+  function filasQueEntran(ol) {
+    const alto = ol.parentElement.clientHeight - ol.parentElement.querySelector("h3").offsetHeight - 4;
+    const fila = parseFloat(getComputedStyle(ol).fontSize || "16") * 1.25 + 10;
+    return Math.max(2, Math.min(C.filasPorLista || 7, Math.floor(alto / fila)));
+  }
+  function pintarLista(ol, info, ranking, vacio) {
+    const por = filasQueEntran(ol);
+    const paginas = Math.max(1, Math.ceil(ranking.length / por));
+    const pg = pagina % paginas;
+    info.textContent = paginas > 1 ? `${pg + 1} / ${paginas}` : "";
+    ol.replaceChildren();
+    if (!ranking.length) { const li = document.createElement("li"); li.className = "vacio"; li.textContent = vacio; ol.append(li); return; }
+    const ahora = performance.now();
+    for (const g of ranking.slice(pg * por, pg * por + por)) {
+      const li = document.createElement("li");
+      if (ahora - g.ultima < 3000) li.className = "nueva";
+      const n = document.createElement("span"); n.className = "n"; n.textContent = g.nombre;
+      const c = document.createElement("span"); c.className = "c"; c.textContent = g.n;
+      li.append(n, c); ol.append(li);
+    }
+  }
+  function pintarListas() {
+    pintarLista($("l-iglesias"), $("pag-iglesias"), rankingIglesias, "Todavía no hay luces");
+    pintarLista($("l-localidades"), $("pag-localidades"), rankingLugares, "Todavía no hay luces");
+  }
+  setInterval(() => {
+    const por = Math.min(filasQueEntran($("l-iglesias")), filasQueEntran($("l-localidades")));
+    if (Math.max(rankingIglesias.length, rankingLugares.length) <= por) return;
+    document.querySelectorAll(".lista ol").forEach((o) => o.classList.add("cambiando"));
+    setTimeout(() => { pagina++; pintarListas(); document.querySelectorAll(".lista ol").forEach((o) => o.classList.remove("cambiando")); }, 500);
+  }, (C.segundosPorPagina || 8) * 1000);
+
+  // Aviso de luz nueva
+  let colaAvisos = [], avisoActivo = false;
+  function avisar(l) { colaAvisos.push(l); if (!avisoActivo) siguienteAviso(); }
+  function siguienteAviso() {
+    const l = colaAvisos.shift();
+    if (!l) { avisoActivo = false; $("aviso").classList.remove("visible"); return; }
+    avisoActivo = true;
+    $("aviso-texto").textContent = `${l.iglesia} · ${l.lugarNombre}`;
+    $("aviso").classList.add("visible");
+    setTimeout(() => { $("aviso").classList.remove("visible"); setTimeout(siguienteAviso, 500); }, colaAvisos.length > 3 ? 1500 : 3200);
+  }
+
+  // ── Datos: respuestas del formulario ──────────────────────
+  const vistos = new Map();   // id de respuesta → luz
+  let primeraCarga = true;
+  function agregar(id, partido, localidad, iglesia) {
+    const u = ubicar(partido, localidad);
+    iglesia = String(iglesia || "").replace(/\s+/g, " ").trim().slice(0, 60);
+    if (!u || !iglesia) return null;
+    const l = {
+      id, iglesia, lugar: u.fuera ? "fuera" : clave(u.nombre) + "|" + u.lat, lugarNombre: u.nombre,
+      lat0: u.fuera ? null : u.lat, lon0: u.fuera ? null : u.lon, lat: null, lon: null, p: null,
+      f: 0.7 + Math.random() * 0.6, fase: Math.random() * 6.28, t: performance.now()
+    };
+    vistos.set(id, l);
+    luces.push(l);
+    return l;
+  }
+  function aplicarFilas(filas) {
+    const enHoja = new Set();
+    const nuevas = [];
+    filas.forEach((f) => {
+      enHoja.add(f.id);
+      if (f.oculta) return;
+      if (!vistos.has(f.id)) { const l = agregar(f.id, f.partido, f.localidad, f.iglesia); if (l) nuevas.push(l); }
+    });
+    // respuestas ocultadas o borradas en la planilla: se apagan
+    const antes = luces.length;
+    luces = luces.filter((l) => enHoja.has(l.id) && !filas.find((f) => f.id === l.id && f.oculta));
+    if (luces.length !== antes) for (const id of [...vistos.keys()]) if (!luces.find((l) => l.id === id)) vistos.delete(id);
+    // en la primera carga se encienden de a una, rápido; después, cada nueva con su aviso
+    const ahora = performance.now();
+    nuevas.forEach((l, i) => {
+      l.t = primeraCarga ? ahora + Math.min(4000, i * 4000 / Math.max(1, nuevas.length)) : ahora + i * 900;
+      if (!primeraCarga) setTimeout(() => avisar(l), i * 900);
+    });
+    primeraCarga = false;
+    colocar();
+    recontar();
+    apuntar(false);
+  }
+
+  // La planilla se lee como JSONP (un <script>): Google no permite leerla con fetch desde otra página,
+  // pero sí de esta forma, que funciona también abriendo el archivo con doble clic.
+  function interpretar(cab, filas) {
+    const col = (pred) => cab.findIndex((h) => pred(clave(h)));
+    const cPartido = col((h) => h.includes("partido"));
+    const cIglesia = col((h) => h.includes("iglesia"));
+    const cOcultar = col((h) => h.startsWith("ocultar"));
+    const cLocalidades = cab.map((h, i) => (clave(h).startsWith("localidad") ? i : -1)).filter((i) => i >= 0);
+    return filas.map((r, i) => ({
+      id: "f" + (i + 2) + "|" + (r[0] || ""),
+      partido: (r[cPartido] || "").trim(),
+      localidad: (cLocalidades.map((j) => (r[j] || "").trim()).find(Boolean) || ""),
+      iglesia: (r[cIglesia] || "").trim(),
+      oculta: cOcultar >= 0 && (r[cOcultar] || "").trim() !== ""
+    })).filter((f) => f.partido && f.iglesia);
+  }
+  function procesar(resp) {
+    if (!resp || resp.status === "error") {
+      errorLectura = (resp && resp.errors && resp.errors[0] && (resp.errors[0].detailed_message || resp.errors[0].message)) || "respuesta inválida";
+      return;
+    }
+    const t = resp.table || { cols: [], rows: [] };
+    const cab = t.cols.map((c) => c.label || "");
+    const filas = t.rows.map((r) => (r.c || []).map((x) => (x == null ? "" : String(x.f != null ? x.f : x.v != null ? x.v : ""))));
+    aplicarFilas(interpretar(cab, filas));
+    ultimaLectura = Date.now(); errorLectura = "";
+  }
+
+  let ultimaLectura = 0, errorLectura = "", leyendo = false;
+  function leer() {
+    if (!C.planilla || leyendo) return;
+    leyendo = true;
+    const cb = "__fdlRespuestas" + Date.now();
+    const s = document.createElement("script");
+    const fin = () => { leyendo = false; clearTimeout(espera); delete window[cb]; s.remove(); };
+    const espera = setTimeout(() => { errorLectura = "la planilla no responde o no está compartida con el link"; fin(); }, 15000);
+    window[cb] = (resp) => { try { procesar(resp); } finally { fin(); } };
+    s.onerror = () => { errorLectura = "sin conexión"; fin(); };
+    s.src = "https://docs.google.com/spreadsheets/d/" + encodeURIComponent(C.planilla) + "/gviz/tq?tqx=out:json;responseHandler:" + cb +
+      "&headers=1&sheet=" + encodeURIComponent(C.hoja || "Respuestas") + "&t=" + Date.now();
+    document.head.append(s);
+  }
+  setInterval(() => {
+    if (!C.planilla) { $("estado").textContent = "Modo de prueba: se agregan luces de ejemplo"; return; }
+    if (errorLectura) $("estado").textContent = "No se pudo leer la planilla (" + errorLectura + "). Se reintenta solo.";
+    else if (ultimaLectura) $("estado").textContent = "Actualizado hace " + Math.round((Date.now() - ultimaLectura) / 1000) + " s";
+  }, 1000);
+
+  // ── Modo de prueba (sin planilla configurada) ─────────────
+  const IGLESIAS_PRUEBA = ["Iglesia Rajem", "Iglesia Esperanza", "Centro Cristiano Vida", "Iglesia Bautista Central", "Ministerio Luz y Vida", "Iglesia Rajem", "Comunidad de Fe", "Iglesia Rajem"];
+  const LOCALIDADES_PRUEBA = [["José C. Paz", "José C. Paz"], ["José C. Paz", "José C. Paz"], ["San Miguel", "San Miguel"], ["Malvinas Argentinas", "Grand Bourg"], ["Pilar", "Del Viso"], ["Moreno", "Trujui"], ["La Matanza", "San Justo"], ["La Plata", "La Plata"], ["General Pueyrredón", "Mar del Plata"], ["Bahía Blanca", "Bahía Blanca"], ["Tigre", "Benavídez"], ["Quilmes", "Quilmes"], ["Ciudad Autónoma de Buenos Aires (CABA)", ""]];
+  let nPrueba = 0;
+  function luzDePrueba() {
+    const [p, l] = LOCALIDADES_PRUEBA[Math.floor(Math.random() * LOCALIDADES_PRUEBA.length)];
+    const ig = IGLESIAS_PRUEBA[Math.floor(Math.random() * IGLESIAS_PRUEBA.length)];
+    const luz = agregar("prueba" + (++nPrueba), p, l, ig);
+    if (!luz) return;
+    luz.t = performance.now();
+    colocar(); recontar(); apuntar(false); avisar(luz);
+  }
+  if (!C.planilla) {
+    $("prueba").hidden = false;
+    for (let i = 0; i < 18; i++) { const l = LOCALIDADES_PRUEBA[i % LOCALIDADES_PRUEBA.length]; const x = agregar("prueba" + (++nPrueba), l[0], l[1], IGLESIAS_PRUEBA[i % IGLESIAS_PRUEBA.length]); if (x) x.t = performance.now() + i * 200; }
+    colocar(); recontar();
+    setInterval(luzDePrueba, 4500);
+  } else {
+    leer();
+    setInterval(leer, Math.max(4, C.cadaSegundos || 8) * 1000);
+  }
+
+  // ── Animación ─────────────────────────────────────────────
+  function cuadro(ahora) {
+    if (vuelo) {
+      const t = Math.min(1, (ahora - vuelo.t0) / vuelo.dur);
+      cam = vuelo.interp(d3.easeCubicInOut(t));
+      baseSucia = true;
+      if (t >= 1) vuelo = null;
+    }
+    dibujarBase();
+    dibujarLuces(ahora);
+    requestAnimationFrame(cuadro);
+  }
+
+  // ── Comandos (ocultos) ────────────────────────────────────
+  function pantallaCompleta() {
+    const d = document, el = d.documentElement;
+    try {
+      const r = d.fullscreenElement ? d.exitFullscreen() : (el.requestFullscreen || el.webkitRequestFullscreen).call(el);
+      if (r && r.catch) r.catch(() => {});
+    } catch (e) { /* no disponible */ }
+  }
+  window.addEventListener("keydown", (ev) => {
+    if (ev.ctrlKey || ev.metaKey || ev.altKey) return;
+    const t = ev.key.toLowerCase();
+    if (t === "f") pantallaCompleta();
+    else if (t === "1") { modoVista = "provincia"; apuntar(false); }
+    else if (t === "2") { modoVista = "gba"; apuntar(false); }
+    else if (t === "a" || t === "0") { modoVista = "auto"; apuntar(false); }
+    else if (t === "p") { proyector = !proyector; baseSucia = true; try { localStorage.setItem("fdl-proyector", proyector ? "1" : "0"); } catch (e) { /* */ } }
+    else if (t === "r") leer();
+    else if (t === "d" && !C.planilla) luzDePrueba();
+    else return;
+    ev.preventDefault();
+  });
+  let temporizador = null;
+  window.addEventListener("pointermove", () => {
+    escenario.classList.remove("sin-cursor");
+    clearTimeout(temporizador);
+    temporizador = setTimeout(() => escenario.classList.add("sin-cursor"), 2000);
+  });
+  let pendiente = null;
+  window.addEventListener("resize", () => { clearTimeout(pendiente); pendiente = setTimeout(() => { redimensionar(); pintarListas(); }, 180); });
+
+  redimensionar();
+  recontar();
+  requestAnimationFrame(cuadro);
+})();
+</script>
+</body>
+</html>
