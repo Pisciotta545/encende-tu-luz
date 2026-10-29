@@ -178,12 +178,14 @@
 
   // alto que queda libre arriba del recuento
   const libreAlto = () => Math.max(H * 0.5, $("recuento").getBoundingClientRect().top - 8);
+  // el mapa se encuadra entre el cartel de arriba y el recuento de abajo
   function vistaDe([o, s, e, n]) {
     const a = proj([o, n]), b = proj([e, s]);
-    const lh = libreAlto();
+    const arriba = Math.min(H * 0.16, 150);
+    const lh = libreAlto() - arriba;
     const w = Math.max(b[0] - a[0], (b[1] - a[1]) * W / lh) * 1.1;
     const k = W / w;
-    return [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2 + (H - lh) / 2 / k, w];
+    return [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2 + (H - lh - 2 * arriba) / 2 / k, w];
   }
   function vistaKm(lat, lon, km) {
     const dlon = km / 2 / (111.32 * Math.cos(lat * Math.PI / 180)), dlat = km / 2 / 110.57 * 0.6;
@@ -301,6 +303,7 @@
 
   // ── Línea de tiempo ───────────────────────────────────────
   // esperando → llenando → pausa → rajem → viaje → fin
+  let progresoViaje = 0;     // cuánto avanzaron (en promedio) las luces hacia Rajem
   let fase = "esperando", indice = 0, proximo = 0, tFase = 0, llegadas = 0;
   const ahoraS = () => performance.now() / 1000;
   function intervalo() {
@@ -342,7 +345,7 @@
       cartel("Partido de José C. Paz", "José C. Paz");
     }
     if (fase === "viaje" || fase === "partido" || fase === "cuadra" || fase === "fin") {
-      let llegaron = 0;
+      let llegaron = 0, suma = 0, cuantas = 0;
       for (const l of luces) {
         if (l.lat0 == null || l.t === null) continue;
         const u = Math.max(0, Math.min(1, ((t - tFase) / ETAPAS.viaje - l.retraso) / (1 - 0.3)));
@@ -351,8 +354,10 @@
         l.lon = l.lo + (IG.lon - l.lo) * e;
         proyectar(l);
         if (u >= 1) llegaron++;
+        suma += e; cuantas++;
       }
       llegadas = llegaron;
+      progresoViaje = cuantas ? suma / cuantas : 1;   // 0 al salir, 1 cuando llegaron todas
     }
     if (fase === "viaje" && t - tFase >= ETAPAS.viaje) { fase = "partido"; proximo = t + ETAPAS.pausaPartido; }
     if (fase === "partido" && t >= proximo) {
@@ -402,9 +407,11 @@
       const p = proj([IG.lon, IG.lat]);
       const x = p[0] * k + ox, y = p[1] * k + oy;
       const entrada = Math.min(1, (s - tFaseRajem()) / 1.2);
-      const fuerza = 1 + 0.9 * Math.log2(1 + llegadas) / Math.log2(2 + luces.length);
+      // la luz de Rajem crece a medida que las luces llegan: núcleo hasta ~3×, resplandor hasta ~2×
+      const fuerza = 1 + 2.2 * progresoViaje;
+      const fuerzaHalo = 1 + 1.1 * progresoViaje;
       lctx.globalCompositeOperation = "lighten";
-      const rh = 120 * escala * fuerza * entrada;
+      const rh = 120 * escala * fuerzaHalo * entrada;
       lctx.drawImage(haloRajem, x - rh, y - rh, rh * 2, rh * 2);
       const r = 24 * escala * fuerza * entrada * (1 + 0.06 * Math.sin(s * 2.4));
       lctx.drawImage(brillo, x - r, y - r, r * 2, r * 2);
@@ -413,7 +420,7 @@
         const f = ((s + j * 0.9) % 1.8) / 1.8;
         lctx.globalAlpha = 0.7 * (1 - f) * entrada;
         lctx.strokeStyle = "rgb(255,214,150)"; lctx.lineWidth = 1.6;
-        lctx.beginPath(); lctx.arc(x, y, 10 + f * 100 * escala * fuerza, 0, Math.PI * 2); lctx.stroke();
+        lctx.beginPath(); lctx.arc(x, y, 10 + f * 100 * escala * fuerzaHalo, 0, Math.PI * 2); lctx.stroke();
       }
       lctx.globalAlpha = entrada;
       lctx.globalCompositeOperation = "source-over";
