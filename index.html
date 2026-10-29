@@ -31,7 +31,7 @@
     position: absolute; left: 0; right: 0; bottom: 0;
     padding: clamp(28px, 6vh, 70px) calc(var(--gutter) + env(safe-area-inset-right, 0px)) calc(var(--gutter) * .7 + env(safe-area-inset-bottom, 0px)) calc(var(--gutter) + env(safe-area-inset-left, 0px));
     background: linear-gradient(to top, rgba(0,0,0,.92) 55%, rgba(0,0,0,0));
-    display: grid; grid-template-columns: auto 1fr 1fr; gap: clamp(14px, 3vw, 56px); align-items: end;
+    display: flex; align-items: flex-end;
     transition: opacity 1s ease;
   }
   #recuento.oculto { opacity: 0; }
@@ -71,9 +71,26 @@
   #cartel small { display: block; font-size: clamp(11px, .85vw, 15px); letter-spacing: .24em; text-transform: uppercase; color: var(--vela); }
   #cartel b { display: block; margin-top: 4px; font: italic 500 clamp(30px, 3.6vw, 64px)/1 var(--display); font-weight: 500; text-shadow: 0 0 30px rgba(255,190,110,.4), 0 0 20px #000; }
 
+  /* Créditos del final */
+  #creditos { position: absolute; inset: 0; z-index: 4; overflow: hidden; background: rgba(0,0,0,0); transition: background 2.5s ease; }
+  #creditos.visible { background: rgba(0,0,0,.82); }
+  #creditos-rollo { position: absolute; left: 50%; top: 0; width: min(1100px, calc(100% - 2 * var(--gutter))); transform: translate(-50%, 100vh); text-align: center; }
+  #creditos-rollo h2 { margin: 0; font: italic 500 clamp(56px, 7vw, 130px)/1 var(--display); text-shadow: 0 0 40px rgba(255,190,110,.4); }
+  #creditos-rollo .resumen { margin: 14px 0 0; font-size: clamp(15px, 1.3vw, 22px); letter-spacing: .08em; color: var(--tenue); }
+  #creditos-rollo h3 { margin: clamp(56px, 9vh, 110px) 0 6px; font-size: clamp(12px, 1vw, 16px); font-weight: 500; letter-spacing: .26em; text-transform: uppercase; color: var(--vela); }
+  #creditos-rollo h4 { margin: 26px 0 8px; font: italic 500 clamp(24px, 2.3vw, 40px)/1.1 var(--display); color: var(--tinta); }
+  #creditos-rollo .grupo { columns: 3 260px; column-gap: 48px; text-align: left; }
+  #creditos-rollo .fila { display: flex; justify-content: space-between; gap: 16px; break-inside: avoid; padding: 5px 0; border-bottom: 1px solid var(--hilo); font-size: clamp(15px, 1.25vw, 22px); }
+  #creditos-rollo .fila b { font-weight: 500; color: var(--vela); font-variant-numeric: tabular-nums; }
+  #creditos-rollo .lejos .grupo { columns: 1; max-width: 560px; margin: 0 auto; }
+  #creditos-rollo .lejos h4 { margin-top: 34px; }
+  #creditos-rollo .lejos .fila { font-size: clamp(18px, 1.6vw, 28px); }
+  #creditos-rollo .cierre { margin: clamp(80px, 14vh, 160px) 0 0; padding-bottom: 6vh; }
+  #creditos-rollo .cierre p { margin: 0; font: italic 500 clamp(34px, 4vw, 72px)/1.1 var(--display); text-wrap: balance; }
+  #creditos-rollo .cierre small { display: block; margin-top: 14px; font-size: clamp(12px, 1vw, 16px); letter-spacing: .24em; text-transform: uppercase; color: var(--vela); }
+
   @media (orientation: portrait) {
-    #recuento { grid-template-columns: 1fr 1fr; }
-    #recuento .total { grid-column: 1 / -1; display: flex; align-items: baseline; gap: 10px; }
+    #recuento .total { display: flex; align-items: baseline; gap: 10px; }
     .total b { font-size: 44px; }
     .lista li { font-size: 13px; }
   }
@@ -91,8 +108,11 @@
 
   <section id="recuento" class="oculto" aria-live="polite">
     <div class="total"><b id="n-total">0</b><span>luces encendidas</span></div>
-    <div class="lista"><h3>Por localidad <small id="cant-localidades"></small></h3><ol id="l-localidades"></ol></div>
-    <div class="lista"><h3>Por iglesia <small id="cant-iglesias"></small></h3><ol id="l-iglesias"></ol></div>
+  </section>
+
+  <!-- Final: recuento completo que pasa como los créditos de una película -->
+  <section id="creditos" hidden aria-live="polite">
+    <div id="creditos-rollo"></div>
   </section>
 
   <section id="tabla" hidden aria-label="Recuento completo">
@@ -109,6 +129,8 @@
 <script src="lib/provincia.js"></script>
 <script src="lib/localidades-ba.js"></script>
 <script src="lib/rajem.js"></script>
+<script src="lib/provincias-ar.js"></script>
+<script src="lib/localidades-ar.js"></script>
 <script src="luces-provincia.js"></script>
 <script>
 (function () {
@@ -119,7 +141,10 @@
   const IG = C.iglesia;
   const $ = (id) => document.getElementById(id);
   const reducir = matchMedia("(prefers-reduced-motion: reduce)").matches;
-  const OTRO_LUGAR = "Otro lugar (fuera de la provincia)";
+  const OTRO_LUGAR = "Otro lugar (fuera de la provincia)";   // respuestas del formulario anterior
+  const OTRO_PAIS = "Otro país";
+  const AR = window.LOCALIDADES_AR.provincias;
+  const GRUPO_BA = "Provincia de Buenos Aires", GRUPO_CABA = "Ciudad de Buenos Aires", GRUPO_PAISES = "Otros países";
 
   // ── Localidades: coordenadas por partido y localidad ──────
   const clave = (s) => String(s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().trim();
@@ -138,9 +163,32 @@
     partidosPorNombre.set(k, (partidosPorNombre.get(k) || new Set()).add(p.p));
   }
   const nombreLugar = (loc, partido) => (partidosPorNombre.get(clave(loc)) || new Set()).size > 1 ? `${loc} (${partido})` : loc;
-  function ubicar(partido, localidad) {
+  const limpio = (t, max) => String(t || "").replace(/\s+/g, " ").trim().slice(0, max || 50);
+  const esCABA = (t) => clave(t).startsWith("ciudad autonoma");
+  const CABA = { lat: -34.6037, lon: -58.3816, nombre: "Ciudad Autónoma de Buenos Aires", grupo: GRUPO_CABA };
+  // Ciudad de otra provincia: se busca en la lista oficial; si no está, la luz va al centro de la provincia
+  function ubicarCiudad(prov, ciudad) {
+    const P = AR[prov];
+    if (!P) return null;
+    const c = clave(ciudad).replace(/[^a-z0-9ñ ]+/g, " ").replace(/\s+/g, " ").trim();
+    const m = (c && P.loc.find((l) => clave(l[0]) === c)) ||
+      (c.length >= 4 && P.loc.find((l) => clave(l[0]).startsWith(c))) ||
+      (c.length >= 5 && P.loc.find((l) => clave(l[0]).includes(c)));
+    const nombre = m ? m[0] : (limpio(ciudad, 40) || prov);
+    return { lat: m ? m[1] : P.centro[0], lon: m ? m[2] : P.centro[1], nombre: `${nombre} (${prov})`, grupo: prov, prov };
+  }
+  // f = { provincia, partido, localidad, ciudad, pais } tal como vienen del formulario
+  function ubicar(f) {
+    const prov = limpio(f.provincia, 80);
+    if (prov === OTRO_PAIS || f.partido === OTRO_LUGAR) return { fuera: true, nombre: limpio(f.pais, 50) || "Otro país", grupo: GRUPO_PAISES };
+    if (esCABA(prov) || esCABA(f.partido)) return Object.assign({}, CABA);
+    if (prov && clave(prov) !== "buenos aires") return ubicarCiudad(prov, f.ciudad);
+    const u = ubicarBA(f.partido, f.localidad);
+    if (u) u.grupo = GRUPO_BA;
+    return u;
+  }
+  function ubicarBA(partido, localidad) {
     if (!partido) return null;
-    if (partido === OTRO_LUGAR) return { fuera: true, nombre: "Fuera de la provincia" };
     const cp = centroPartido.get(clave(partido));
     if (!cp) return null;
     if (!localidad && cp.unica) return { lat: cp.unica.lat, lon: cp.unica.lon, nombre: nombreLugar(cp.unica.n, cp.nombre) };
@@ -168,6 +216,21 @@
   const LOCAL = 1e4;
   let origen = [0, 0], trazosCalles = {};
   const PROVINCIA = [-63.5, -41.1, -56.6, -33.2];
+  const PA = window.PROVINCIAS_AR;
+  const provFeat = new Map(topojson.feature(PA, PA.objects.provincias).features.map((f) => [f.properties.nombre, f]));
+  const provVisibles = new Map();   // provincia → momento en que apareció
+  let trazosProv = {};
+  // lo que se ve: Buenos Aires más las provincias que ya tienen alguna luz
+  function rangoVisible() {
+    let [o, s, e, n] = PROVINCIA;
+    for (const nombre of provVisibles.keys()) {
+      const f = provFeat.get(nombre);
+      if (!f) continue;
+      const [[a, b], [c, d]] = d3.geoBounds(f);
+      o = Math.min(o, a); s = Math.min(s, b); e = Math.max(e, c); n = Math.max(n, d);
+    }
+    return [o, s, e, n];
+  }
 
   let W, H, dpr, proj, trazos = {}, pxKm = 1;
   let cam = [0, 0, 1], vuelo = null, baseSucia = true, claveBase = "";
@@ -208,6 +271,8 @@
     proj = d3.geoMercator().fitSize([W, H], { type: "Feature", geometry: { type: "Polygon", coordinates: [[[PROVINCIA[0], PROVINCIA[1]], [PROVINCIA[2], PROVINCIA[1]], [PROVINCIA[2], PROVINCIA[3]], [PROVINCIA[0], PROVINCIA[3]], [PROVINCIA[0], PROVINCIA[1]]]] } });
     const ruta = d3.geoPath(proj);
     for (const k in capas) trazos[k] = new Path2D(ruta(capas[k]));
+    trazosProv = {};
+    for (const [nombre, f] of provFeat) trazosProv[nombre] = new Path2D(ruta(f));
     origen = proj([IG.lon, IG.lat]);
     const relativa = d3.geoTransform({ point(x, y) { const q = proj([x, y]); this.stream.point((q[0] - origen[0]) * LOCAL, (q[1] - origen[1]) * LOCAL); } });
     const rl = d3.geoPath(relativa);
@@ -216,8 +281,8 @@
     pxKm = Math.abs(b[0] - a[0]) / (0.05 * 111.32 * Math.cos(IG.lat * Math.PI / 180));
     for (const l of luces) proyectar(l);
     objetivo = "";
-    cam = fase === "cuadra" || fase === "fin" ? vistaKm(IG.lat, IG.lon, 0.7)
-      : fase === "viaje" || fase === "partido" ? vistaKm(IG.lat, IG.lon, 16) : vistaDe(PROVINCIA);
+    cam = fase === "cuadra" || fase === "fin" || fase === "creditos" ? vistaKm(IG.lat, IG.lon, 0.7)
+      : fase === "viaje" || fase === "partido" ? vistaKm(IG.lat, IG.lon, 16) : vistaDe(rangoVisible());
     vuelo = null; baseSucia = true;
   }
 
@@ -235,6 +300,15 @@
     linea("limites", pr(0.32, 0.6), pr(0.7, 1.4));
     linea("comunas", pr(0.18, 0.4), pr(0.5, 1));
     linea("contorno", 0.95, pr(1.3, 2.4));
+    // provincias de quienes vinieron de lejos: aparecen de a poco
+    const ahoraMs = performance.now();
+    for (const [nombre, t0] of provVisibles) {
+      if (!trazosProv[nombre]) continue;
+      const a = Math.max(0, Math.min(1, (ahoraMs - t0) / 1600));
+      if (a < 1) baseSucia = true;
+      bctx.globalAlpha = 0.9 * a; bctx.lineWidth = pr(1.3, 2.4) / k; bctx.setLineDash([]);
+      bctx.stroke(trazosProv[nombre]);
+    }
     // calles alrededor de Rajem: aparecen al acercarse (dibujadas relativas a la iglesia)
     if (km < 20) {
       const kl = k / LOCAL;
@@ -273,14 +347,15 @@
   let luces = [];          // una por respuesta
   const vistos = new Set();
   const KM = 1 / 110.57;
-  function agregar(id, partido, localidad, iglesia) {
+  function agregar(id, f) {
     if (vistos.has(id)) return;
-    const u = ubicar(partido, localidad);
+    const u = ubicar(f);
+    let iglesia = f.iglesia;
     iglesia = String(iglesia || "").replace(/\s+/g, " ").trim().slice(0, 60);
     if (!u || !iglesia) return;
     vistos.add(id);
     luces.push({
-      id, iglesia, partido, localidad, lugar: u.fuera ? "fuera" : clave(u.nombre), lugarNombre: u.nombre,
+      id, iglesia, resp: f, grupo: u.grupo, prov: u.prov || null, lugar: (u.fuera ? "pais|" : "") + clave(u.nombre), lugarNombre: u.nombre,
       lat0: u.fuera ? null : u.lat, lon0: u.fuera ? null : u.lon, lat: null, lon: null, p: null,
       f: 0.7 + Math.random() * 0.6, fase: Math.random() * 6.28, t: null, retraso: Math.random()
     });
@@ -329,6 +404,12 @@
         const l = pendientes[0];
         l.t = performance.now();
         recontar(l);
+        // primera luz de otra provincia: se dibuja esa provincia y la cámara se abre para mostrarla
+        if (l.prov && !provVisibles.has(l.prov) && provFeat.has(l.prov)) {
+          provVisibles.set(l.prov, performance.now());
+          baseSucia = true;
+          volarA(vistaDe(rangoVisible()), 2600);
+        }
         proximo = t + intervalo();
       } else if (!C.planilla || listoPlanilla) {
         fase = "pausa"; proximo = t + (C.pausaAntesDeRajem || 2.5);
@@ -365,7 +446,8 @@
       volarA(vistaKm(IG.lat, IG.lon, 0.7), ETAPAS.cuadra * 1000);
       cartel(IG.direccion, IG.nombre);
     }
-    if (fase === "cuadra" && t >= proximo) fase = "fin";
+    if (fase === "cuadra" && t >= proximo) { fase = "fin"; proximo = t + (C.pausaAntesDelRecuento || 4); }
+    if (fase === "fin" && t >= proximo) { fase = "creditos"; mostrarCreditos(); }
   }
   function cartel(sub, titulo) {
     $("cartel-sub").textContent = sub || "";
@@ -403,7 +485,7 @@
     }
 
     // Rajem: faro con ondas, cada vez más fuerte a medida que llegan las luces
-    if (fase === "rajem" || fase === "viaje" || fase === "partido" || fase === "cuadra" || fase === "fin") {
+    if (fase === "rajem" || fase === "viaje" || fase === "partido" || fase === "cuadra" || fase === "fin" || fase === "creditos") {
       const p = proj([IG.lon, IG.lat]);
       const x = p[0] * k + ox, y = p[1] * k + oy;
       const entrada = Math.min(1, (s - tFaseRajem()) / 1.2);
@@ -475,7 +557,7 @@
       const gi = igl.get(ki) || { n: 0, nombres: new Map(), k: ki };
       gi.n++; gi.nombres.set(l.iglesia, (gi.nombres.get(l.iglesia) || 0) + 1);
       igl.set(ki, gi);
-      const gl = lug.get(l.lugar) || { n: 0, nombre: l.lugarNombre, lat: l.lat0, lon: l.lon0, k: l.lugar };
+      const gl = lug.get(l.lugar) || { n: 0, nombre: l.lugarNombre, lat: l.lat0, lon: l.lon0, k: l.lugar, grupo: l.grupo };
       gl.n++; lug.set(l.lugar, gl);
     }
     rankingIglesias = [...igl.values()].map((g) => ({ k: g.k, n: g.n, nombre: [...g.nombres.entries()].sort((a, b) => b[1] - a[1])[0][0] }))
@@ -483,29 +565,59 @@
     rankingLugares = [...lug.values()].sort((a, b) => b.n - a.n || a.nombre.localeCompare(b.nombre, "es"));
     totalEncendidas = total;
     $("n-total").textContent = total;
-    $("cant-localidades").textContent = rankingLugares.length ? "· " + rankingLugares.length : "";
-    $("cant-iglesias").textContent = rankingIglesias.length ? "· " + rankingIglesias.length : "";
-    pintar($("l-localidades"), rankingLugares, nueva && nueva.lugar, "localidades");
-    pintar($("l-iglesias"), rankingIglesias, nueva && claveIglesia(nueva.iglesia), "iglesias");
     if (!$("tabla").hidden) pintarTabla();
   }
   let totalEncendidas = 0;
-  // se ven las primeras y el resto se suma en "Otras…", así la columna siempre da el total
-  function pintar(ol, ranking, claveNueva, que) {
-    ol.replaceChildren();
-    const filas = C.filasRecuento || 5;
-    const fila = (nombre, n, clase) => {
-      const li = document.createElement("li");
-      if (clase) li.className = clase;
-      const a = document.createElement("span"); a.className = "n"; a.textContent = nombre;
-      const b = document.createElement("span"); b.className = "c"; b.textContent = n;
-      li.append(a, b); ol.append(li);
+  // ── Créditos del final: el recuento completo, para agradecer a cada uno ──
+  function mostrarCreditos() {
+    const rollo = $("creditos-rollo");
+    rollo.replaceChildren();
+    const el = (tag, txt, clase) => { const e = document.createElement(tag); if (txt != null) e.textContent = txt; if (clase) e.className = clase; return e; };
+    const filas = (lista) => {
+      const g = el("div", null, "grupo");
+      for (const x of lista) { const f = el("div", null, "fila"); f.append(el("span", x.nombre), el("b", x.n)); g.append(f); }
+      return g;
     };
-    const visibles = ranking.length > filas ? ranking.slice(0, filas - 1) : ranking;
-    for (const g of visibles) fila(g.nombre, g.n, g.k === claveNueva ? "sube" : "");
-    const resto = ranking.slice(visibles.length);
-    if (resto.length) fila(`Otras ${resto.length} ${que}`, resto.reduce((a, g) => a + g.n, 0), "otras");
+    rollo.append(el("h2", "Gracias"));
+    const otros = rankingLugares.filter((g) => g.grupo !== GRUPO_BA && g.grupo !== GRUPO_CABA);
+    rollo.append(el("p", `${totalEncendidas} luces · ${rankingLugares.length} lugares · ${rankingIglesias.length} iglesias`, "resumen"));
+    // quienes vinieron de otras provincias y de otros países, primero y más grande
+    if (otros.length) {
+      rollo.append(el("h3", "Vinieron desde lejos"));
+      const lejos = el("div", null, "lejos");
+      const grupos = [...new Set(otros.map((g) => g.grupo))].sort((a, b) => (a === GRUPO_PAISES) - (b === GRUPO_PAISES) || a.localeCompare(b, "es"));
+      for (const gr of grupos) {
+        lejos.append(el("h4", gr));
+        lejos.append(filas(otros.filter((g) => g.grupo === gr).map((g) => ({ nombre: g.nombre.replace(/ \([^)]*\)$/, ""), n: g.n }))));
+      }
+      rollo.append(lejos);
+    }
+    const caba = rankingLugares.filter((g) => g.grupo === GRUPO_CABA);
+    const ba = rankingLugares.filter((g) => g.grupo === GRUPO_BA);
+    if (ba.length || caba.length) {
+      rollo.append(el("h3", "Provincia y Ciudad de Buenos Aires"));
+      rollo.append(filas(caba.concat(ba)));
+    }
+    rollo.append(el("h3", "Iglesias"));
+    rollo.append(filas(rankingIglesias));
+    const cierre = el("div", null, "cierre");
+    cierre.append(el("p", "Gracias por ser parte de la Fiesta de la Luz"), el("small", `${totalEncendidas} luces encendidas`));
+    rollo.append(cierre);
+
+    const sec = $("creditos");
+    sec.hidden = false;
+    $("cartel").classList.remove("visible");      // que no se transparenten detrás
+    $("recuento").classList.add("oculto");
+    requestAnimationFrame(() => sec.classList.add("visible"));
+    // pasa de abajo hacia arriba y termina con el agradecimiento en el centro de la pantalla
+    const alto = rollo.offsetHeight, h = innerHeight;
+    const fin = Math.min(h * 0.12, h - alto - h * 0.06) < 0 ? -(alto - h * 0.62) : (h - alto) / 2;
+    const recorrido = h - fin;
+    const velocidad = C.velocidadCreditos || 55;   // píxeles por segundo
+    rollo.animate([{ transform: `translate(-50%, ${h}px)` }, { transform: `translate(-50%, ${fin}px)` }],
+      { duration: reducir ? 1 : Math.max(6000, recorrido / velocidad * 1000), easing: "linear", fill: "forwards", delay: 1500 });
   }
+
   // Tecla T: tabla con TODAS las localidades e iglesias, para controlar contra la planilla
   function pintarTabla() {
     const llenar = (tabla, ranking) => {
@@ -528,7 +640,7 @@
   // para controlar el recuento desde afuera (pruebas)
   window.__fdlRecuento = () => ({
     total: totalEncendidas,
-    respuestas: luces.map((l) => ({ partido: l.partido, localidad: l.localidad, iglesia: l.iglesia, encendida: l.t !== null })),
+    respuestas: luces.map((l) => Object.assign({}, l.resp, { lugar: l.lugarNombre, grupo: l.grupo, encendida: l.t !== null })),
     localidades: rankingLugares.map((g) => [g.nombre, g.n]),
     iglesias: rankingIglesias.map((g) => [g.nombre, g.n])
   });
@@ -562,13 +674,17 @@
   let listoPlanilla = false, leyendo = false;
   function interpretar(cab, filas) {
     const col = (pred) => cab.findIndex((h) => pred(clave(h)));
-    const cPartido = col((h) => h.includes("partido")), cIglesia = col((h) => h.includes("iglesia")), cOcultar = col((h) => h.startsWith("ocultar"));
+    const cProv = col((h) => h.includes("provincia") && h.includes("de que")), cPartido = col((h) => h.includes("partido"));
+    const cCiudad = col((h) => h.startsWith("ciudad o localidad")), cPais = col((h) => h.startsWith("pais y ciudad"));
+    const cIglesia = col((h) => h.includes("iglesia")), cOcultar = col((h) => h.startsWith("ocultar"));
     const cLoc = cab.map((h, i) => (clave(h).startsWith("localidad") ? i : -1)).filter((i) => i >= 0);
+    const v = (r, c) => (c >= 0 ? (r[c] || "").trim() : "");
     return filas.map((r, i) => ({
-      id: "f" + (i + 2) + "|" + (r[0] || ""), partido: (r[cPartido] || "").trim(),
-      localidad: (cLoc.map((j) => (r[j] || "").trim()).find(Boolean) || ""), iglesia: (r[cIglesia] || "").trim(),
-      oculta: cOcultar >= 0 && (r[cOcultar] || "").trim() !== ""
-    })).filter((f) => f.partido && f.iglesia && !f.oculta);
+      id: "f" + (i + 2) + "|" + (r[0] || ""),
+      provincia: v(r, cProv), partido: v(r, cPartido), ciudad: v(r, cCiudad), pais: v(r, cPais), iglesia: v(r, cIglesia),
+      localidad: (cLoc.map((j) => (r[j] || "").trim()).find(Boolean) || ""),
+      oculta: v(r, cOcultar) !== ""
+    })).filter((f) => (f.provincia || f.partido) && f.iglesia && !f.oculta);
   }
   function procesar(resp) {
     if (!resp || resp.status === "error") return;
@@ -576,7 +692,7 @@
     const cab = t.cols.map((c) => c.label || "");
     const filas = t.rows.map((r) => (r.c || []).map((x) => (x == null ? "" : String(x.f != null ? x.f : x.v != null ? x.v : ""))));
     if (fase === "esperando" || fase === "llenando") {
-      for (const f of interpretar(cab, filas)) agregar(f.id, f.partido, f.localidad, f.iglesia);
+      for (const f of interpretar(cab, filas)) agregar(f.id, f);
       colocar();
     }
     listoPlanilla = true;
@@ -599,15 +715,19 @@
   if (!C.planilla) {
     $("prueba").hidden = false;
     const IGL = ["Iglesia Rajem", "Iglesia Rajem", "Iglesia Rajem", "Iglesia Esperanza", "Centro Cristiano Vida", "Iglesia Bautista Central", "Ministerio Luz y Vida", "Comunidad de Fe", "rajem"];
-    const LUG = [["José C. Paz", "José C. Paz"], ["José C. Paz", "José C. Paz"], ["José C. Paz", "Tortuguitas"], ["San Miguel", "San Miguel"], ["San Miguel", "Bella Vista"],
-      ["Malvinas Argentinas", "Grand Bourg"], ["Malvinas Argentinas", "Los Polvorines"], ["Pilar", "Del Viso"], ["Moreno", "Trujui"], ["La Matanza", "San Justo"],
-      ["La Plata", "La Plata"], ["General Pueyrredón", "Mar del Plata"], ["Bahía Blanca", "Bahía Blanca"], ["Tigre", "Benavídez"], ["Quilmes", "Quilmes"],
-      ["Ciudad Autónoma de Buenos Aires (CABA)", ""], ["José C. Paz", "Del Viso"], ["Hurlingham", "Hurlingham"]];
+    const BA = (partido, localidad) => ({ provincia: "Buenos Aires", partido, localidad });
+    const LUG = [BA("José C. Paz", "José C. Paz"), BA("José C. Paz", "José C. Paz"), BA("José C. Paz", "Tortuguitas"), BA("San Miguel", "San Miguel"), BA("San Miguel", "Bella Vista"),
+      BA("Malvinas Argentinas", "Grand Bourg"), BA("Malvinas Argentinas", "Los Polvorines"), BA("Pilar", "Del Viso"), BA("Moreno", "Trujui"), BA("La Matanza", "San Justo"),
+      BA("La Plata", "La Plata"), BA("General Pueyrredón", "Mar del Plata"), BA("Bahía Blanca", "Bahía Blanca"), BA("Tigre", "Benavídez"), BA("Quilmes", "Quilmes"),
+      { provincia: "Ciudad Autónoma de Buenos Aires" }, BA("José C. Paz", "Del Viso"), BA("Hurlingham", "Hurlingham")];
+    const LEJOS = [{ provincia: "Córdoba", ciudad: "Villa María" }, { provincia: "Santa Fe", ciudad: "Rosario" }, { provincia: "Santa Fe", ciudad: "rosario" },
+      { provincia: "Misiones", ciudad: "Posadas" }, { provincia: "Mendoza", ciudad: "Godoy Cruz" }, { provincia: "Otro país", pais: "Uruguay, Montevideo" }];
     let semilla = 7;
     const azar = () => (semilla = (semilla * 9301 + 49297) % 233280) / 233280;
     for (let i = 0; i < 70; i++) {
-      const [p, l] = LUG[Math.floor(azar() * LUG.length)];
-      agregar("prueba" + i, p, l, IGL[Math.floor(azar() * IGL.length)]);
+      // las de lejos aparecen repartidas en el medio del llenado
+      const f = i % 12 === 6 && LEJOS.length ? LEJOS.shift() : LUG[Math.floor(azar() * LUG.length)];
+      agregar("prueba" + i, Object.assign({ iglesia: IGL[Math.floor(azar() * IGL.length)] }, f));
     }
     colocar();
   } else {

@@ -3,8 +3,9 @@
 //
 //  Las luces son las respuestas del formulario "Encendé tu luz"
 //  (se crea con formulario\crear-formulario.gs). Al abrir el mapa se
-//  encienden todas, una por una, con el recuento abajo; al final todas
-//  viajan hasta la Iglesia Rajem mientras la cámara se acerca.
+//  encienden todas, una por una (si alguien vino de otra provincia, se dibuja
+//  esa provincia); al final todas viajan hasta la Iglesia Rajem mientras la
+//  cámara se acerca, y termina con el recuento completo, como créditos.
 //  Mientras "planilla" esté vacía funciona en MODO DE PRUEBA con datos de ejemplo.
 // ─────────────────────────────────────────────────────────────
 window.LUCES_PROVINCIA = {
@@ -15,8 +16,8 @@ window.LUCES_PROVINCIA = {
 
   duracionLlenado: 30,  // segundos para encender todas las luces (se reparten entre todas)
   pausaAntesDeRajem: 2.5,
-  duracionViaje: 8,     // segundos que tardan las luces en llegar a Rajem
-  filasRecuento: 5,     // cuántas localidades / iglesias se ven abajo
+  pausaAntesDelRecuento: 4,   // segundos en la cuadra de Rajem antes del recuento final
+  velocidadCreditos: 55,      // velocidad del recuento final (píxeles por segundo)
 
   iglesia: {
     nombre: "Iglesia Rajem",

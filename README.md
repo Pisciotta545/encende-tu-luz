@@ -1,7 +1,7 @@
 # Encendé tu luz · Fiesta de la Luz
 
 Mapa sorpresa de la provincia de Buenos Aires: se encienden las luces de las personas que
-completaron el formulario (partido, localidad e iglesia), con el recuento por localidad y
+completaron el formulario (provincia, localidad e iglesia), con el recuento por localidad y
 por iglesia, y al final todas las luces viajan hasta la Iglesia Rajem.
 
 - Las respuestas se leen de una planilla de Google (configurada en `luces-provincia.js`).
